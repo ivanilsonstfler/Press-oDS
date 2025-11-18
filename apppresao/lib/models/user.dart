@@ -21,6 +21,32 @@ class User {
     this.bloodType,
   });
 
+  // >>> ADICIONADO: método copyWith <<<
+  User copyWith({
+    int? id,
+    String? username,
+    String? email,
+    String? passwordHash,
+    String? fullName,
+    DateTime? dateOfBirth,
+    double? weight,
+    double? height,
+    String? bloodType,
+  }) {
+    return User(
+      id: id ?? this.id,
+      username: username ?? this.username,
+      email: email ?? this.email,
+      passwordHash: passwordHash ?? this.passwordHash,
+      fullName: fullName ?? this.fullName,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+      weight: weight ?? this.weight,
+      height: height ?? this.height,
+      bloodType: bloodType ?? this.bloodType,
+    );
+  }
+  // <<< FIM DO copyWith >>>
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
