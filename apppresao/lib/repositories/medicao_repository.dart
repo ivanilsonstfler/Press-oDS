@@ -1,13 +1,17 @@
-import 'package:sqflite/sqflite.dart';
-import '../db/app_database.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
 import '../models/medicao.dart';
 
 class MedicaoRepository {
-  Future<Database> get _db async => await AppDatabase.instance.database;
+  Box<Map> get _box => Hive.box<Map>('medicoes');
 
   Future<void> addMedicao(Medicao medicao) async {
-    final db = await _db;
-    await db.insert('medicoes', medicao.toMap());
+    final map = medicao.toMap();
+    // salva sem id
+    final key = await _box.add(map);
+    // atualiza id
+    map['id'] = key;
+    await _box.put(key, map);
   }
 
   Future<List<Medicao>> getMedicoesByUser({
@@ -15,26 +19,28 @@ class MedicaoRepository {
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    final db = await _db;
-    final where = <String>['user_id = ?'];
-    final args = <dynamic>[userId];
+    final result = <Medicao>[];
 
-    if (startDate != null) {
-      where.add('data_medicao >= ?');
-      args.add(startDate.toIso8601String());
+    for (final raw in _box.values) {
+      final map = Map<String, dynamic>.from(raw as Map);
+
+      if (map['user_id'] != userId) continue;
+
+      final med = Medicao.fromMap(map);
+
+      if (startDate != null && med.dataMedicao.isBefore(startDate)) {
+        continue;
+      }
+      if (endDate != null && med.dataMedicao.isAfter(endDate)) {
+        continue;
+      }
+
+      result.add(med);
     }
-    if (endDate != null) {
-      where.add('data_medicao <= ?');
-      args.add(endDate.toIso8601String());
-    }
 
-    final res = await db.query(
-      'medicoes',
-      where: where.join(' AND '),
-      whereArgs: args,
-      orderBy: 'data_medicao DESC',
-    );
+    // Ordena do mais recente para o mais antigo (igual ao ORDER BY DESC)
+    result.sort((a, b) => b.dataMedicao.compareTo(a.dataMedicao));
 
-    return res.map((m) => Medicao.fromMap(m)).toList();
+    return result;
   }
 }

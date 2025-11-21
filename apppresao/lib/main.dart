@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-import 'db/app_database.dart';
 import 'providers/auth_provider.dart';
 import 'repositories/user_repository.dart';
 import 'screens/login_screen.dart';
@@ -11,8 +11,13 @@ import 'screens/profile_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Garante que o DB será criado
-  await AppDatabase.instance.database;
+
+  // Inicializa Hive para todas as plataformas (Android, Web, etc.)
+  await Hive.initFlutter();
+
+  // Abre as "tabelas" (caixas) que vamos usar
+  await Hive.openBox<Map>('users');
+  await Hive.openBox<Map>('medicoes');
 
   runApp(const AppPressaoApp());
 }
