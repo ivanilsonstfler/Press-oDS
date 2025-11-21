@@ -22,7 +22,7 @@ class MedicaoRepository {
     final result = <Medicao>[];
 
     for (final raw in _box.values) {
-      final map = Map<String, dynamic>.from(raw as Map);
+      final map = Map<String, dynamic>.from(raw);
 
       if (map['user_id'] != userId) continue;
 

@@ -7,6 +7,9 @@ class Medicao {
   final String? remediosTomados;
   final int userId;
 
+  // NOVO: como a pessoa está se sentindo
+  final String? humor; // "bem", "ok", "mal"
+
   Medicao({
     this.id,
     required this.sistolica,
@@ -15,9 +18,9 @@ class Medicao {
     this.notas,
     this.remediosTomados,
     required this.userId,
+    this.humor,
   });
 
-  /// Mesma lógica de status que seu /get_medicoes do Flask
   String get status {
     if (sistolica >= 140 || diastolica >= 90) {
       return 'Hipertensão Estágio 2';
@@ -38,6 +41,7 @@ class Medicao {
       'notas': notas,
       'remedios_tomados': remediosTomados,
       'user_id': userId,
+      'humor': humor, // NOVO
     };
   }
 
@@ -50,6 +54,7 @@ class Medicao {
       notas: map['notas'] as String?,
       remediosTomados: map['remedios_tomados'] as String?,
       userId: map['user_id'] as int,
+      humor: map['humor'] as String?, // NOVO
     );
   }
 }

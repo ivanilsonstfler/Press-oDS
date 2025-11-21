@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/medicao.dart';
 import '../providers/auth_provider.dart';
 import '../repositories/medicao_repository.dart';
+import '../utils/export_utils.dart';
+import 'consulta_screen.dart';
+import 'pressure_chart_tab.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -27,6 +31,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _loading = false;
 
   final _fmt = DateFormat('dd/MM/yyyy HH:mm');
+
+  int _currentTab = 0;
+  String _humorSelecionado = 'bem'; // padrão
 
   @override
   void initState() {
@@ -65,6 +72,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       remediosTomados:
           _remediosCtrl.text.isEmpty ? null : _remediosCtrl.text,
       userId: user.id!,
+      humor: _humorSelecionado,
     );
     await _repo.addMedicao(med);
 
@@ -99,22 +107,471 @@ class _DashboardScreenState extends State<DashboardScreen> {
       initialDate: _endDate ?? now,
     );
     if (picked != null) {
-      // incluir o dia inteiro (igual ao timedelta no Flask)
-      setState(() => _endDate = picked.add(const Duration(hours: 23, minutes: 59, seconds: 59)));
+      setState(() => _endDate = picked.add(
+          const Duration(hours: 23, minutes: 59, seconds: 59)));
       _loadMedicoes();
     }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'Normal':
+        return Colors.greenAccent;
+      case 'Elevada':
+        return Colors.amberAccent;
+      case 'Hipertensão Estágio 1':
+        return Colors.orangeAccent;
+      case 'Hipertensão Estágio 2':
+        return Colors.redAccent;
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
+  Map<String, num> _calcularResumo() {
+    if (_medicoes.isEmpty) {
+      return {
+        'mediaSist': 0,
+        'mediaDiast': 0,
+        'maxSist': 0,
+        'maxDiast': 0,
+        'minSist': 0,
+        'minDiast': 0,
+      };
+    }
+
+    int somaSist = 0;
+    int somaDiast = 0;
+    int maxSist = _medicoes.first.sistolica;
+    int maxDiast = _medicoes.first.diastolica;
+    int minSist = _medicoes.first.sistolica;
+    int minDiast = _medicoes.first.diastolica;
+
+    for (final m in _medicoes) {
+      somaSist += m.sistolica;
+      somaDiast += m.diastolica;
+      if (m.sistolica > maxSist) maxSist = m.sistolica;
+      if (m.diastolica > maxDiast) maxDiast = m.diastolica;
+      if (m.sistolica < minSist) minSist = m.sistolica;
+      if (m.diastolica < minDiast) minDiast = m.diastolica;
+    }
+
+    final mediaSist = somaSist / _medicoes.length;
+    final mediaDiast = somaDiast / _medicoes.length;
+
+    return {
+      'mediaSist': mediaSist,
+      'mediaDiast': mediaDiast,
+      'maxSist': maxSist,
+      'maxDiast': maxDiast,
+      'minSist': minSist,
+      'minDiast': minDiast,
+    };
+  }
+
+  void _mostrarExplicacao() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Classificação da pressão'),
+        content: const Text(
+          'Normal: abaixo de 120/80 mmHg\n'
+          'Elevada: sistólica 120–129 e diastólica < 80\n'
+          'Hipertensão Estágio 1: 130–139 ou 80–89\n'
+          'Hipertensão Estágio 2: ≥ 140 ou ≥ 90\n\n'
+          'Sempre siga as orientações do seu médico.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _exportarCsv() async {
+    if (_medicoes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhuma medição para exportar.')),
+      );
+      return;
+    }
+
+    final csv = ExportUtils.medicoesToCsv(_medicoes);
+    await Share.share(csv, subject: 'Medições de pressão arterial');
+  }
+
+  void _abrirModoConsulta() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ConsultaScreen(medicoes: _medicoes),
+      ),
+    );
+  }
+
+  Widget _buildHumorSelector() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'Como você está se sentindo?',
+          style: TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        const SizedBox(width: 8),
+        ToggleButtons(
+          isSelected: [
+            _humorSelecionado == 'bem',
+            _humorSelecionado == 'ok',
+            _humorSelecionado == 'mal',
+          ],
+          onPressed: (index) {
+            setState(() {
+              if (index == 0) _humorSelecionado = 'bem';
+              if (index == 1) _humorSelecionado = 'ok';
+              if (index == 2) _humorSelecionado = 'mal';
+            });
+          },
+          borderRadius: BorderRadius.circular(20),
+          constraints: const BoxConstraints(minHeight: 32, minWidth: 40),
+          children: const [
+            Text('👍'),
+            Text('😐'),
+            Text('👎'),
+          ],
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final user = auth.currentUser;
 
     if (!auth.isLoggedIn) {
       Future.microtask(() {
         Navigator.pushReplacementNamed(context, '/login');
       });
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+          body: Center(child: CircularProgressIndicator()));
     }
+
+    final resumo = _calcularResumo();
+
+    final telaMedicoes = SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Olá, ${user?.username ?? ''} 👋',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Registre e acompanhe suas medições.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: 16),
+
+          // Card de resumo
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Média',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${resumo['mediaSist']?.toStringAsFixed(0) ?? '--'}/${resumo['mediaDiast']?.toStringAsFixed(0) ?? '--'}',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_medicoes.isNotEmpty)
+                          Text(
+                            'Última: ${_medicoes.first.sistolica}/${_medicoes.first.diastolica}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Máx: ${resumo['maxSist']}/${resumo['maxDiast']}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Mín: ${resumo['minSist']}/${resumo['minDiast']}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Card de formulário
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Nova medição',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _mostrarExplicacao,
+                          icon: const Icon(
+                            Icons.help_outline,
+                            size: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _sistolicaCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Sistólica',
+                              suffixText: 'mmHg',
+                            ),
+                            validator: (v) {
+                              final value = int.tryParse(v ?? '');
+                              if (value == null) {
+                                return 'Número';
+                              }
+                              if (value < 50 || value > 300) {
+                                return '50–300';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _diastolicaCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Diastólica',
+                              suffixText: 'mmHg',
+                            ),
+                            validator: (v) {
+                              final value = int.tryParse(v ?? '');
+                              if (value == null) {
+                                return 'Número';
+                              }
+                              if (value < 30 || value > 200) {
+                                return '30–200';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildHumorSelector(),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _notasCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Notas (opcional)',
+                      ),
+                      maxLength: 200,
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _remediosCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Remédios (opcional)',
+                      ),
+                      maxLength: 200,
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _addMedicao,
+                        icon: const Icon(Icons.add_circle_outline),
+                        label: const Text('Adicionar medição'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickStartDate,
+                  icon: const Icon(Icons.date_range),
+                  label: Text(
+                    _startDate == null
+                        ? 'Início'
+                        : DateFormat('dd/MM').format(_startDate!),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickEndDate,
+                  icon: const Icon(Icons.event),
+                  label: Text(
+                    _endDate == null
+                        ? 'Fim'
+                        : DateFormat('dd/MM').format(_endDate!),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          if (_loading)
+            const Center(child: CircularProgressIndicator())
+          else if (_medicoes.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 24),
+              child: Center(
+                child: Text(
+                  'Nenhuma medição cadastrada ainda.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _medicoes.length,
+              itemBuilder: (context, index) {
+                final m = _medicoes[index];
+                final color = _statusColor(m.status);
+
+                return Card(
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: color.withOpacity(0.2),
+                      child: Text(
+                        '${m.sistolica}\n${m.diastolica}',
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    title: Text(
+                      m.status,
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _fmt.format(m.dataMedicao),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (m.humor != null)
+                          Text(
+                            'Como estava: ${m.humor}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        if (m.notas != null && m.notas!.isNotEmpty)
+                          Text(
+                            'Notas: ${m.notas}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        if (m.remediosTomados != null &&
+                            m.remediosTomados!.isNotEmpty)
+                          Text(
+                            'Remédios: ${m.remediosTomados}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+
+    final telaGrafico = PressureChartTab(medicoes: _medicoes);
 
     return Scaffold(
       appBar: AppBar(
@@ -124,164 +581,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onPressed: () {
               Navigator.pushNamed(context, '/profile');
             },
-            icon: const Icon(Icons.person),
+            icon: const Icon(Icons.person_outline),
           ),
-          IconButton(
-            onPressed: () {
-              auth.logout();
-              Navigator.pushReplacementNamed(context, '/login');
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'exportar') {
+                _exportarCsv();
+              } else if (value == 'consulta') {
+                _abrirModoConsulta();
+              }
             },
-            icon: const Icon(Icons.logout),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'exportar',
+                child: Text('Exportar CSV'),
+              ),
+              PopupMenuItem(
+                value: 'consulta',
+                child: Text('Modo consulta'),
+              ),
+            ],
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Form de medição
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _sistolicaCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Pressão Sistólica',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: (v) {
-                                final value = int.tryParse(v ?? '');
-                                if (value == null) {
-                                  return 'Informe um número';
-                                }
-                                if (value < 50 || value > 300) {
-                                  return 'Entre 50 e 300';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _diastolicaCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Pressão Diastólica',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: (v) {
-                                final value = int.tryParse(v ?? '');
-                                if (value == null) {
-                                  return 'Informe um número';
-                                }
-                                if (value < 30 || value > 200) {
-                                  return 'Entre 30 e 200';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _notasCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Notas (opcional)',
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLength: 200,
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _remediosCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Remédios Tomados (opcional)',
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLength: 200,
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: _addMedicao,
-                        child: const Text('Adicionar Medição'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Filtro por data
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _pickStartDate,
-                    child: Text(_startDate == null
-                        ? 'Início'
-                        : DateFormat('dd/MM/yyyy').format(_startDate!)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _pickEndDate,
-                    child: Text(_endDate == null
-                        ? 'Fim'
-                        : DateFormat('dd/MM/yyyy').format(_endDate!)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _loading
-                ? const CircularProgressIndicator()
-                : _medicoes.isEmpty
-                    ? const Text('Nenhuma medição encontrada.')
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _medicoes.length,
-                        itemBuilder: (context, index) {
-                          final m = _medicoes[index];
-                          return Card(
-                            child: ListTile(
-                              title: Text(
-                                  '${m.sistolica}/${m.diastolica} - ${m.status}'),
-                              subtitle: Text(_fmt.format(m.dataMedicao)),
-                              isThreeLine: true,
-                              trailing: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  if (m.notas != null && m.notas!.isNotEmpty)
-                                    Text('Notas: ${m.notas}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                  if (m.remediosTomados != null &&
-                                      m.remediosTomados!.isNotEmpty)
-                                    Text('Remédios: ${m.remediosTomados}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-          ],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF1D4ED8), Color(0xFF020617)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
         ),
+        child: SafeArea(
+          child: _currentTab == 0 ? telaMedicoes : telaGrafico,
+        ),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentTab,
+        onTap: (index) {
+          setState(() {
+            _currentTab = index;
+          });
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite_border),
+            label: 'Medições',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.show_chart),
+            label: 'Gráfico',
+          ),
+        ],
       ),
     );
   }

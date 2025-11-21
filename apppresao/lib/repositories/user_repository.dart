@@ -35,7 +35,7 @@ class UserRepository {
 
   Future<User?> getByEmail(String email) async {
     for (final raw in _box.values) {
-      final map = Map<String, dynamic>.from(raw as Map);
+      final map = Map<String, dynamic>.from(raw);
       if (map['email'] == email) {
         return User.fromMap(map);
       }
