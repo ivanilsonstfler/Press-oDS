@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../models/medicao.dart';
 
 class ConsultaScreen extends StatelessWidget {
@@ -30,6 +31,7 @@ class ConsultaScreen extends StatelessWidget {
               itemCount: medicoes.length,
               itemBuilder: (context, index) {
                 final m = medicoes[index];
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Container(
@@ -74,3 +76,35 @@ class ConsultaScreen extends StatelessWidget {
                                 color: Colors.white70,
                                 fontSize: 14,
                               ),
+                            ),
+                          ),
+                        if (m.notas != null && m.notas!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Notas: ${m.notas}',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ),
+                        if (m.remediosTomados != null &&
+                            m.remediosTomados!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Remédios: ${m.remediosTomados}',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}

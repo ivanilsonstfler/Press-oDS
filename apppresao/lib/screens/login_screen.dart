@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -121,24 +122,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                       child: ElevatedButton(
                                         onPressed: () async {
                                           if (!_formKey.currentState!
-                                              .validate()) {
-                                            return;
-                                          }
+                                              .validate()) return;
                                           setState(() {
                                             _loading = true;
                                             _error = null;
                                           });
+
                                           final msg = await auth.login(
                                             _emailCtrl.text.trim(),
                                             _passwordCtrl.text,
                                           );
+
                                           setState(() {
                                             _loading = false;
                                             _error = msg;
                                           });
+
+                                          // LOGIN OK -> vai para a ROTA /dashboard
                                           if (msg == null && mounted) {
                                             Navigator.pushReplacementNamed(
-                                                context, '/dashboard');
+                                              context,
+                                              '/dashboard',
+                                            );
                                           }
                                         },
                                         child: const Text('Entrar'),

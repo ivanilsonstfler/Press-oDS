@@ -27,13 +27,13 @@ class AppPressaoApp extends StatelessWidget {
     final ThemeData base = ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF2563EB), // azul
+        seedColor: const Color(0xFF2563EB),
         brightness: Brightness.dark,
       ),
     );
 
     final theme = base.copyWith(
-      scaffoldBackgroundColor: const Color(0xFF020617), // fundo quase preto
+      scaffoldBackgroundColor: const Color(0xFF020617),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -88,6 +88,7 @@ class AppPressaoApp extends StatelessWidget {
         routes: {
           '/login': (_) => const LoginScreen(),
           '/register': (_) => const RegisterScreen(),
+          // AQUI: sempre que for para "/dashboard", vai pro DashboardScreen NOVO
           '/dashboard': (_) => const DashboardScreen(),
           '/profile': (_) => const ProfileScreen(),
         },
