@@ -11,11 +11,11 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  bool _loading = false;
-  String? _error;
+  final _formKey = GlobalKey<FormState>();// chave do formulário
+  final _emailCtrl = TextEditingController();// controlador do campo de email
+  final _passwordCtrl = TextEditingController();// controlador do campo de senha
+  bool _loading = false;// indica se está carregando
+  String? _error;// mensagem de erro
 
   @override
   Widget build(BuildContext context) {
