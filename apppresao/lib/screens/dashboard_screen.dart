@@ -18,51 +18,58 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+    // Chave para validar e salvar o formulário de nova medição
   final _formKey = GlobalKey<FormState>();
+    // Controllers dos campos de texto (pressão, notas, remédios)
   final _sistolicaCtrl = TextEditingController();
   final _diastolicaCtrl = TextEditingController();
   final _notasCtrl = TextEditingController();
   final _remediosCtrl = TextEditingController();
+    // Repositório para acessar as medições
   final _repo = MedicaoRepository();
 
+// Filtros de data para carregar as medições
   DateTime? _startDate;
   DateTime? _endDate;
+  // Lista de medições carregadas
   List<Medicao> _medicoes = [];
+  // Indicador de carregamento
   bool _loading = false;
-
+// Formatação de data para exibição
   final _fmt = DateFormat('dd/MM/yyyy HH:mm');
-
+// Índice da aba atual (0 = medições, 1 = gráfico)
   int _currentTab = 0;
   String _humorSelecionado = 'bem'; // padrão
 
   @override
   void initState() {
     super.initState();
+    // Carrega as medições ao iniciar a tela
     _loadMedicoes();
   }
-
+// Carrega as medições do usuário com base nos filtros de data
   Future<void> _loadMedicoes() async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final auth = Provider.of<AuthProvider>(context, listen: false);// obtém o provedor de autenticação
     final user = auth.currentUser;
-    if (user == null) return;
+    if (user == null) return;// se não houver usuário logado, retorna
 
-    setState(() => _loading = true);
+    setState(() => _loading = true);// define o estado de carregamento como verdadeiro
     final list = await _repo.getMedicoesByUser(
       userId: user.id!,
       startDate: _startDate,
       endDate: _endDate,
-    );
+    );// busca as medições do repositório com os filtros aplicados
     setState(() {
       _medicoes = list;
       _loading = false;
-    });
+    });// atualiza o estado com a lista de medições carregadas e define o carregamento como falso
   }
 
   Future<void> _addMedicao() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final user = auth.currentUser;
-    if (user == null) return;
+    if (user == null) return;// se não houver usuário logado, retorna
 
     final med = Medicao(
       sistolica: int.parse(_sistolicaCtrl.text),
@@ -91,11 +98,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       firstDate: DateTime(2000),
       lastDate: now,
       initialDate: _startDate ?? now,
-    );
+    );// mostra o seletor de data
+
     if (picked != null) {
       setState(() => _startDate = picked);
       _loadMedicoes();
-    }
+    }// se uma data foi selecionada, atualiza o estado e recarrega as medições
   }
 
   Future<void> _pickEndDate() async {
@@ -105,12 +113,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       firstDate: DateTime(2000),
       lastDate: now,
       initialDate: _endDate ?? now,
-    );
+    );// mostra o seletor de data
+
     if (picked != null) {
       setState(() => _endDate = picked.add(
           const Duration(hours: 23, minutes: 59, seconds: 59)));
       _loadMedicoes();
-    }
+    }// se uma data foi selecionada, atualiza o estado e recarrega as medições
   }
 
   Color _statusColor(String status) {
@@ -125,7 +134,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return Colors.redAccent;
       default:
         return Colors.blueGrey;
-    }
+    }// retorna a cor correspondente ao status da medição
   }
 
   Map<String, num> _calcularResumo() {
@@ -137,7 +146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'maxDiast': 0,
         'minSist': 0,
         'minDiast': 0,
-      };
+      };// se não houver medições, retorna zeros
     }
 
     int somaSist = 0;
@@ -180,7 +189,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           'Hipertensão Estágio 1: 130–139 ou 80–89\n'
           'Hipertensão Estágio 2: ≥ 140 ou ≥ 90\n\n'
           'Sempre siga as orientações do seu médico.',
-        ),
+        ),// mostra um diálogo com a explicação das classificações de pressão arterial
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -195,12 +204,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_medicoes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Nenhuma medição para exportar.')),
-      );
+      );// mostra uma mensagem se não houver medições para exportar
       return;
     }
 
     final csv = ExportUtils.medicoesToCsv(_medicoes);
-    await Share.share(csv, subject: 'Medições de pressão arterial');
+    await Share.share(csv, subject: 'Medições de pressão arterial');// compartilha o CSV gerado com outras aplicações
   }
 
   void _abrirModoConsulta() {
@@ -209,7 +218,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       MaterialPageRoute(
         builder: (_) => ConsultaScreen(medicoes: _medicoes),
       ),
-    );
+    );// navega para a tela de modo consulta, passando as medições carregadas
   }
 
   Widget _buildHumorSelector() {
@@ -219,7 +228,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const Text(
           'Como você está se sentindo?',
           style: TextStyle(color: Colors.white70, fontSize: 13),
-        ),
+        ),// rótulo do seletor de humor
         const SizedBox(width: 8),
         ToggleButtons(
           isSelected: [
@@ -248,7 +257,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
+    final auth = Provider.of<AuthProvider>(context);// obtém o provedor de autenticação
     final user = auth.currentUser;
 
     if (!auth.isLoggedIn) {
@@ -272,7 +281,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               fontSize: 22,
               fontWeight: FontWeight.bold,
               color: Colors.white,
-            ),
+            ), // saudação ao usuário
           ),
           const SizedBox(height: 4),
           const Text(
